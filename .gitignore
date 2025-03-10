@@ -1,0 +1,4 @@
+**/nohup*
+cmake-build*
+build
+.idea
