@@ -1,67 +1,50 @@
 #include <array>
 #include <cmath>
 #include <fmt/core.h>
-#include <iostream>
+#include <glm/glm.hpp>
 #include <optional>
 #include <vector>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/string_cast.hpp"
+
 #define PI 3.14159;
 
-namespace math {
-  template<std::size_t R, std::size_t C>
-  struct Matrix {
-    size_t                   rows, cols;
-    std::array<float, R * C> data;
+constexpr int WIDTH  = 8;
+constexpr int HEIGHT = 4;
 
-    float       &operator()(const std::size_t row, const std::size_t col) { return data[row * C + col]; }
-    const float &operator()(const std::size_t row, const std::size_t col) const { return data[row * C + col]; }
-  };
-
-  template<std::size_t R, std::size_t C>
-  Matrix<R, C> Identity() {
-    Matrix<R, C> eye = {R, C, {}};
-    for (std::size_t i = 0; i < R && i < C; i++) {
-      eye.data[i * C + i] = 1.0f; // Set diagonal to 1
-    }
-    return eye;
-  }
-
-  template<std::size_t R1, std::size_t C1, std::size_t R2, std::size_t C2>
-  Matrix<R1, C2> operator*(const Matrix<R1, C1> &A, const Matrix<R2, C2> &B) {
-    static_assert(C1 == R2, "Matrix multiplication dimensions must match: C1 == R2");
-
-    Matrix<R1, C2> result = {}; // Zero initialize
-
-    for (std::size_t i = 0; i < R1; ++i) {
-      for (std::size_t j = 0; j < C2; ++j) {
-        for (std::size_t k = 0; k < C1; ++k) {
-          result(i, j) += A(i, k) * B(k, j);
-        }
-      }
-    }
-
-    return result;
-  }
-} // namespace math
 
 // Specialization of fmt::formatter for Matrix<R, C>
-template<std::size_t R, std::size_t C>
-struct fmt::formatter<math::Matrix<R, C>> {
+template<>
+struct fmt::formatter<glm::mat3> {
   constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
 
   template<typename FormatContext>
-  auto format(const math::Matrix<R, C> &mat, FormatContext &ctx) const {
+  auto format(const glm::mat3 &mat, FormatContext &ctx) const {
     auto out = ctx.out();
-    out      = fmt::format_to(out, "Matrix<{}, {}> [\n", R, C);
+    return fmt::format_to(out, "{}", glm::to_string(mat));
+  }
+};
 
-    for (std::size_t i = 0; i < R; ++i) {
-      out = fmt::format_to(out, "\t[ ");
-      for (std::size_t j = 0; j < C; ++j) {
-        out = fmt::format_to(out, "{:7.3f}, ", mat(i, j)); // Align values nicely
-      }
-      out = fmt::format_to(out, "\t],\n");
-    }
-    return fmt::format_to(out, "]");
+template<>
+struct fmt::formatter<glm::mat4> {
+  constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+  template<typename FormatContext>
+  auto format(const glm::mat4 &mat, FormatContext &ctx) const {
+    auto out = ctx.out();
+    return fmt::format_to(out, "{}", glm::to_string(mat));
+  }
+};
+
+template<>
+struct fmt::formatter<glm::vec3> {
+  constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+  template<typename FormatContext>
+  auto format(const glm::mat3 &vec, FormatContext &ctx) const {
+    auto out = ctx.out();
+    return fmt::format_to(out, "{}", glm::to_string(vec));
   }
 };
 
@@ -74,9 +57,7 @@ T Radians(T degrees) {
   return degrees / 180.f * PI;
 }
 
-
-math::Matrix<3, 3>
-ComputeCameraMatrix(const float verticalFOVDegrees, const float imageWidth, const float imageHeight) {
+glm::mat3 ComputeCameraMatrix(const float verticalFOVDegrees, const float imageWidth, const float imageHeight) {
   // Convert vertical FOV from degrees to radians
   const float halfVerticalFOVRadians = Radians(verticalFOVDegrees) / 2.0f;
 
@@ -95,44 +76,72 @@ ComputeCameraMatrix(const float verticalFOVDegrees, const float imageWidth, cons
   const float cx = (imageWidth - 1.0f) / 2.0f;
   const float cy = (imageHeight - 1.0f) / 2.0f;
 
-  // Intrinsic camera matrix
-  math::Matrix<3, 3> cameraMatrix = math::Identity<3, 3>();
-  cameraMatrix(0, 0)              = fx;
-  cameraMatrix(1, 1)              = fy;
-  cameraMatrix(0, 2)              = cx;
-  cameraMatrix(1, 2)              = cy;
-
-  return cameraMatrix;
+  return {{fx, 0, cx}, {0, fy, cy}, {0, 0, 1}};
 }
 
-
-struct vec3 {
-  float x, y, z;
-};
 
 struct uchar4 {
   unsigned char r, g, b, a;
 };
 
-constexpr int WIDTH  = 800;
-constexpr int HEIGHT = 600;
 
 struct Sphere {
-  float radius;
-  vec3  position;
+  float     radius;
+  glm::vec3 position;
+};
+
+
+struct Ray {
+  glm::vec3 origin;
+  glm::vec3 direction;
+};
+
+template<>
+struct fmt::formatter<Ray> {
+  constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+  template<typename FormatContext>
+  auto format(const Ray &ray, FormatContext &ctx) const {
+    auto out = ctx.out();
+    return fmt::format_to(out, "Ray: {{origin: {}\tdirection: {}}}", glm::to_string(ray.origin), glm::to_string(ray.direction));
+  }
 };
 
 struct Camera {
-  float              verticalFov;
-  int                imageWidth;
-  int                imageHeight;
-  math::Matrix<3, 3> cameraMatrix;
-  math::Matrix<4, 4> transform;
+  float     verticalFov;
+  int       imageWidth;
+  int       imageHeight;
+  glm::mat3 cameraMatrix;
+  glm::mat3 cameraMatrixInverse;
+  glm::mat4 transform;
 
   Camera(float verticalFov, int imageWidth, int imageHeight) :
       verticalFov(verticalFov), imageWidth(imageWidth), imageHeight(imageHeight) {
-    cameraMatrix = ComputeCameraMatrix(verticalFov, imageWidth, imageHeight);
-    transform    = math::Identity<4, 4>();
+    cameraMatrix        = ComputeCameraMatrix(verticalFov, imageWidth, imageHeight);
+    cameraMatrixInverse = glm::inverse(cameraMatrix);
+    transform           = glm::mat4(1);
+  }
+
+  std::vector<Ray> GetRaysInLocalFrame() {
+    std::vector<Ray> rays(imageWidth * imageHeight);
+    for (int y = 0; y < imageHeight; y++) {
+      for (int x = 0; x < imageWidth; x++) {
+        rays[x + y * imageWidth] = {{0, 0, 0}, {glm::normalize(cameraMatrixInverse * glm::vec3{x, y, 1})}};
+      }
+    }
+    return rays;
+  }
+
+  std::vector<Ray> GetTransformedRays() {
+    glm::vec3        cameraPosition = transform[3]; // last column as vec3
+    std::vector<Ray> rays(imageWidth * imageHeight);
+    for (int y = 0; y < imageHeight; y++) {
+      for (int x = 0; x < imageWidth; x++) {
+        glm::vec3 rayDirection   = glm::normalize(cameraMatrixInverse * glm::vec3{x, y, 1});
+        rays[x + y * imageWidth] = {cameraPosition, glm::mat3(transform) * rayDirection};
+      }
+    }
+    return rays;
   }
 };
 
@@ -149,14 +158,29 @@ struct fmt::formatter<Camera> {
     fmt::format_to(ctx.out(), "\timageWidth = {}\n", camera.imageWidth);
     fmt::format_to(ctx.out(), "\timageHeight = {}\n", camera.imageHeight);
     fmt::format_to(ctx.out(), "\tcameraMatrix = {}\n", camera.cameraMatrix);
+    fmt::format_to(ctx.out(), "\tcameraMatrixInverse = {}\n", camera.cameraMatrixInverse);
     fmt::format_to(ctx.out(), "\ttransform = {}\n", camera.transform);
     fmt::format_to(ctx.out(), "}}");
     return ctx.out();
   }
 };
 
-std::optional<float> Intersect(const Sphere &sphere, const vec3 &ray_origin, const vec3 &ray_direction) {
-  const vec3 oc = {
+template<>
+struct fmt::formatter<std::vector<Ray>> {
+  constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+  template<typename FormatContext>
+  auto format(const std::vector<Ray> &rays, FormatContext &ctx) const {
+    auto out = ctx.out();
+    for (auto &ray: rays) {
+      fmt::format_to(out, "{}\n", ray);
+    }
+    return out;
+  }
+};
+
+std::optional<float> Intersect(const Sphere &sphere, const glm::vec3 &ray_origin, const glm::vec3 &ray_direction) {
+  const glm::vec3 oc = {
     ray_origin.x - sphere.position.x, ray_origin.y - sphere.position.y, ray_origin.z - sphere.position.z};
 
   const float a =
@@ -180,6 +204,7 @@ int main() {
   Camera camera = Camera(45.0f, WIDTH, HEIGHT);
   fmt::println("{}", camera.cameraMatrix);
   fmt::println("{}", camera);
+  fmt::println("{}", camera.GetRaysInLocalFrame());
 
   return 0;
 
